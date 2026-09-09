@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum GradeLevel {
+  GRADE_7
+  GRADE_8
+  GRADE_9
+  GRADE_10
+}
+
+enum QuarterNumber {
+  Q1
+  Q2
+  Q3
+  Q4
+}
+
+// DepEd SF9 core values marking scale.
+enum ValuesRating {
+  AO // Always Observed
+  SO // Sometimes Observed
+  RO // Rarely Observed
+  NO // Not Observed
+}
+
+// Single-tenant app: exactly one School row, always read/written as a singleton in app code.
+model School {
+  id            String   @id @default(cuid())
+  name          String
+  address       String
+  logoUrl       String?
+  principalName String?
+  schoolYear    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Student {
+  id                 String    @id @default(cuid())
+  lrn                String    @unique @db.VarChar(12)
+  fullName           String
+  gradeLevel         GradeLevel
+  section            String
+  passwordHash       String
+  mustChangePassword Boolean   @default(true)
+  passwordSetAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  grades     Grade[]
+  attendance Attendance[]
+  values     ValuesRatingEntry[]
+  remarks    Remark[]
+
+  @@index([section, gradeLevel])
+}
+
+// Junior High subjects differ across grade levels, so subjects are scoped per grade level.
+model Subject {
+  id         String     @id @default(cuid())
+  name       String
+  gradeLevel GradeLevel
+  sortOrder  Int        @default(0)
+
+  grades Grade[]
+
+  @@unique([name, gradeLevel])
+}
+
+model Grade {
+  id        String        @id @default(cuid())
+  studentId String
+  subjectId String
+  quarter   QuarterNumber
+  score     Decimal       @db.Decimal(5, 2)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subjectId, quarter])
+  @@index([studentId])
+}
+
+model Attendance {
+  id              String        @id @default(cuid())
+  studentId       String
+  quarter         QuarterNumber
+  schoolDaysTotal Int
+  daysPresent     Int
+  daysAbsent      Int
+  daysTardy       Int           @default(0)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, quarter])
+}
+
+model ValuesRatingEntry {
+  id                String        @id @default(cuid())
+  studentId         String
+  coreValue         String
+  behaviorStatement String
+  quarter           QuarterNumber
+  rating            ValuesRating
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, coreValue, behaviorStatement, quarter])
+  @@index([studentId])
+}
+
+model Remark {
+  id        String         @id @default(cuid())
+  studentId String
+  quarter   QuarterNumber?
+  text      String
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
